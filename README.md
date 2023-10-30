@@ -16,9 +16,17 @@ dns_cloudflare_api_token = MY_SECRET_TOKEN
 ## config.json example
 ```json
 {
-  "system_email": "email@example.com",
-  "system_ssh_keyfile": ".ssh/flipper-local-ssl",
-  "system_renew_delay_seconds": 86400,
+  "system": {
+    "email": "email@example.com",
+    "ssh_keyfile": ".ssh/flipper-local-ssl",
+    "renew_delay_seconds": 86400
+  },
+  "gelf": {
+      "host": "gelf.example.com",
+      "port": 1234,
+      "username": "user",
+      "password": "pass"
+  },
   "hosts": [
     {
       "hostname": "gw.example.com",

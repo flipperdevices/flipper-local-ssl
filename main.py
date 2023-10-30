@@ -6,21 +6,37 @@ import time
 import logging
 import subprocess
 from scp import SCPClient
+from pygelf import GelfHttpsHandler
+from socket import gethostname
 from paramiko import SSHClient
 from paramiko import AutoAddPolicy as ParamikoAutoAddPolicy
 
 
 class FlipperLocalSSL:
     def __init__(self):
+        self.config = []
+        self._config_parse()
         self._configure_logs()
         self._configure_ssh()
-        self.config = []
         self.not_need_to_renew_re = re.compile(r"Certificate not yet due for renewal")
-        self._config_parse()
 
     def _configure_logs(self):
         self.logger = logging.getLogger()
         self.logger.setLevel(logging.INFO)
+        if not self.config.get("gelf"):
+            return
+        auth_host = self.config["gelf"]["host"]
+        auth_port = self.config["gelf"]["port"]
+        auth_user = self.config["gelf"]["username"]
+        auth_pass = self.config["gelf"]["password"]
+        handler = GelfHttpsHandler(
+                host=auth_host,
+                port=auth_port,
+                username=auth_user,
+                password=auth_pass,
+                _app="flipper-local-ssl",
+            )
+        self.logger.addHandler(handler)
 
     def _configure_ssh(self):
         self.ssh_client = SSHClient()
@@ -39,7 +55,7 @@ class FlipperLocalSSL:
             "--dns-cloudflare-credentials",
             "cloudflare.ini",
             "-m",
-            self.config["system_email"],
+            self.config["system"]["email"],
             "--agree-tos",
             "--no-eff-email",
             "-n",
@@ -67,7 +83,7 @@ class FlipperLocalSSL:
         logging.info(f"Copying ssl certs to {hostname} via scp")
         port = host["ssh_port"]
         user = host["ssh_user"]
-        keyfile = self.config["system_ssh_keyfile"]
+        keyfile = self.config["system"]["ssh_keyfile"]
         cert_dir = f"/etc/letsencrypt/live/{hostname}"
         self.ssh_client.connect(hostname=hostname, username=user, key_filename=keyfile)
         scp_client = SCPClient(self.ssh_client.get_transport())
@@ -83,7 +99,7 @@ class FlipperLocalSSL:
         logging.info(f"Executing post upload commands on {hostname}")
         port = host["ssh_port"]
         user = host["ssh_user"]
-        keyfile = self.config["system_ssh_keyfile"]
+        keyfile = self.config["system"]["ssh_keyfile"]
         commands = host["post_commands"]
         self.ssh_client.connect(hostname=hostname, username=user, key_filename=keyfile)
         for command in commands:
@@ -105,7 +121,7 @@ class FlipperLocalSSL:
         self.exec_post_commands_on_host(host)
 
     def main(self):
-        sleep_timeout_seconds = self.config["system_renew_delay_seconds"]
+        sleep_timeout_seconds = self.config["system"]["renew_delay_seconds"]
         while True:
             [self.process_host(host) for host in self.config["hosts"]]
             logging.info(f"Sleeping for {sleep_timeout_seconds} seconds..")
