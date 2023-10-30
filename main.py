@@ -1,7 +1,8 @@
-#!/usr/bin/env python3.11
+#!/usr/bin/env python3
 
 import re
 import json
+import time
 import logging
 import subprocess
 from scp import SCPClient
@@ -89,22 +90,31 @@ class FlipperLocalSSL:
             stdin, stdout, stderr = self.ssh_client.exec_command(command)
             exit_status = stdout.channel.recv_exit_status()
             if exit_status != 0:
-                print(f"{stdin}, {stdout}, {stderr}")
+                logging.error(
+                    f"Failed to execute command '{command}' for {hostname} with code: {exit_status}\nstdout:\n{stdout}\nstderr:\n{stderr}"
+                )
 
         self.ssh_client.close()
         logging.info(f"Post upload commands are successfully executed on {hostname}")
 
     def process_host(self, host: list):
-        if self.make_ssl_cert(host["hostname"]):
+        if not self.make_ssl_cert(host["hostname"]):
             return
         if not self.copy_cert_on_host(host):
             return
         self.exec_post_commands_on_host(host)
 
     def main(self):
-        [self.process_host(host) for host in self.config["hosts"]]
+        sleep_timeout_seconds = self.config["system_renew_delay_seconds"]
+        while True:
+            [self.process_host(host) for host in self.config["hosts"]]
+            logging.info(f"Sleeping for {sleep_timeout_seconds} seconds..")
+            time.sleep(sleep_timeout_seconds)
 
 
 if __name__ == "__main__":
-    ssl_app = FlipperLocalSSL()
-    ssl_app.main()
+    try:
+        ssl_app = FlipperLocalSSL()
+        ssl_app.main()
+    except Exception as e:
+        logging.exception(e)
